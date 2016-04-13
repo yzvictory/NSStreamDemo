@@ -1,0 +1,182 @@
+//
+//  ViewController.m
+//  NSStreamDemo
+//
+//  Created by yz on 16/4/8.
+//  Copyright © 2016年 DeviceOne. All rights reserved.
+//
+
+#import "ViewController.h"
+#import <Foundation/Foundation.h>
+
+@interface ViewController ()<NSStreamDelegate>
+{
+//    NSMutableData *data;
+//    NSInteger     bytesWrittenSoFar;
+}
+
+@property (nonatomic,assign) NSInteger location;
+
+@end
+
+@implementation ViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    
+    [self doTestOutputStream];
+//    NSString *filePath = [[NSBundle mainBundle]pathForResource:@"mkfile" ofType:@"txt"];
+//    NSData *data = [NSData dataWithContentsOfFile:filePath];
+//    [self setUpStreamForFile:filePath];
+//    
+//    NSString *doc = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+//    NSString *outputPath = [doc stringByAppendingPathExtension:@"local.txt"];
+//    bytesWrittenSoFar = 0;
+//    
+//    [self setUpOutputStreamForFile:outputPath];
+    // Do any additional setup after loading the view, typically from a nib.
+}
+- (void)setUpStreamForFile:(NSString *)path
+{
+    NSInputStream *inputStream = [[NSInputStream alloc] initWithFileAtPath:path];
+    inputStream.delegate = self;
+    [inputStream scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
+    [inputStream open];
+    
+}
+- (void)setUpOutputStreamForFile:(NSString *)path
+{
+    NSOutputStream *outputStream = [[NSOutputStream alloc]initToFileAtPath:path append:YES];
+    outputStream.delegate = self;
+    [outputStream scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
+    [outputStream open];
+}
+
+//- (void)stream:(NSStream *)aStream handleEvent:(NSStreamEvent)eventCode
+//{
+//    switch (eventCode)
+//    {
+//        case NSStreamEventHasBytesAvailable:
+//        {
+//            if (!data) {
+//                data = [NSMutableData data];
+//            }
+//            
+//            uint8_t buf[1024];
+//            NSInteger len = 0;
+//            len = [(NSInputStream *)aStream read:buf maxLength:1024];  // 读取数据
+//            if (len) {
+//                [data appendBytes:(const void *)buf length:len];
+//            }
+//            
+//        }
+//        break;
+//        case NSStreamEventEndEncountered:
+//        {
+//            
+//        }
+//        break;
+//        case NSStreamEventHasSpaceAvailable:
+//        {
+//            NSInteger       dataLength;
+//            const uint8_t * dataBytes;
+//            NSInteger       bytesWritten;
+//            // 接收到的数据长度
+//            dataLength = [data length];
+//            dataBytes  = [data bytes];
+//            bytesWritten = [(NSOutputStream *)aStream write:&dataBytes[bytesWrittenSoFar] maxLength:dataLength - bytesWrittenSoFar];
+//            assert(bytesWritten != 0);
+//            if (bytesWritten == -1)
+//            {
+//                break;
+//            } else
+//            {
+//                bytesWrittenSoFar += bytesWritten;
+//            }
+//            
+//        }
+//        break;
+//        default:
+//        break;
+//    }
+//}
+- (NSData *)dataWillWrite {
+    static  NSData *data = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSString *filePath = [[NSBundle mainBundle]pathForResource:@"info.plist" ofType:nil];
+        data = [NSData dataWithContentsOfFile:filePath];
+    });
+    
+    return data;
+}
+
+- (void)doTestOutputStream {
+    NSString *doc = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask, YES) lastObject];
+    NSString *outputPath = [doc stringByAppendingPathComponent:@"local.txt"];
+    
+    NSOutputStream *writeStream = [[NSOutputStream alloc] initToFileAtPath:outputPath append:YES];
+    [writeStream setDelegate:self];
+    
+    [writeStream scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
+    [writeStream open];
+}
+
+- (void)stream:(NSStream *)aStream handleEvent:(NSStreamEvent)eventCode {
+    switch (eventCode) {
+        case NSStreamEventHasSpaceAvailable: {
+            
+            NSInteger bufSize = 5;
+            uint8_t buf[bufSize];
+            
+            if (self.location + bufSize > [self dataWillWrite].length) {
+                [[self dataWillWrite] getBytes:buf
+                                         range:NSMakeRange(self.location, self.location + bufSize - [self dataWillWrite].length)];
+            }
+            else {
+                [[self dataWillWrite] getBytes:buf range:NSMakeRange(self.location, bufSize)];
+            }
+            
+            NSOutputStream *writeStream = (NSOutputStream *)aStream;
+            [writeStream write:buf maxLength:sizeof(buf)]; //把buffer里的数据，写入文件
+            
+            self.location += bufSize;
+            if (self.location >= [[self dataWillWrite] length] ) { //写完后关闭流
+                [aStream close];
+            }
+            
+        }
+        break;
+        
+        case NSStreamEventEndEncountered: {
+            NSLog(@"NSStreamEventCompleted");
+            [aStream close];
+        }
+        break;
+        
+        //错误和无事件处理
+        case NSStreamEventErrorOccurred:{
+            
+        }
+        break;
+        case NSStreamEventNone:
+        break;
+        
+        //打开完成
+        case NSStreamEventOpenCompleted: {
+            NSLog(@"NSStreamEventOpenCompleted");
+            
+            
+        }
+        break;
+        
+        default:
+        break;
+    }
+}
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+@end
